@@ -1,8 +1,13 @@
 #![allow(dead_code)]
 
+use std::net::SocketAddr;
+
 use color_eyre::Report;
 use futures::{stream::FuturesUnordered, StreamExt};
-use reqwest::Client;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
+};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
@@ -13,9 +18,7 @@ pub const URL_2: &str = "https://fasterthanli.me/series/advent-of-code-2020/part
 async fn main() -> Result<(), Report> {
     setup()?;
 
-    let client = Client::new();
-
-    let results = vec![fetch_url(client.clone(), URL_1), fetch_url(client, URL_2)]
+    let results = vec![fetch_url(URL_1), fetch_url(URL_2)]
         .into_iter()
         .collect::<FuturesUnordered<_>>()
         .collect::<Vec<_>>()
@@ -28,9 +31,22 @@ async fn main() -> Result<(), Report> {
     Ok(())
 }
 
-async fn fetch_url(client: Client, url: &str) -> Result<(), Report> {
-    let res = client.get(url).send().await?.error_for_status()?;
-    info!(%url, content_type = ?res.headers().get("content-type"), "Got a response!");
+async fn fetch_url(name: &str) -> Result<(), Report> {
+    let addr: SocketAddr = ([1, 1, 1, 1], 80).into();
+    let mut socket = TcpStream::connect(addr).await?;
+
+    socket.write_all(b"GET / HTTP/1.1\r\n").await?;
+    socket.write_all(b"Host: 1.1.1.1\r\n").await?;
+    socket.write_all(b"User-Agent: cool-bear\r\n").await?;
+    socket.write_all(b"Connection: close\r\n").await?;
+    socket.write_all(b"\r\n").await?;
+
+    let mut response = String::with_capacity(256);
+    socket.read_to_string(&mut response).await?;
+
+    let status = response.lines().next().unwrap_or_default();
+    info!(%status, %name, "Got a response!");
+
     Ok(())
 }
 
