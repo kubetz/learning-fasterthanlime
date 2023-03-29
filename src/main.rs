@@ -3,15 +3,14 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use color_eyre::Report;
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpStream,
-};
-use tokio_rustls::{rustls::ClientConfig, TlsConnector};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
+use tokio_rustls::rustls::{ClientConfig, OwnedTrustAnchor, RootCertStore, ServerName};
+use tokio_rustls::TlsConnector;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
-use webpki::DNSNameRef;
 
+// running multiple futures in parallel while using single threaded runtime
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Report> {
     setup()?;
@@ -23,31 +22,52 @@ async fn main() -> Result<(), Report> {
 }
 
 async fn fetch_url(name: &str) -> Result<&str, Report> {
+    // create raw TCP connection for 1.1.1.1:443
     let addr: SocketAddr = ([1, 1, 1, 1], 443).into();
     let socket = TcpStream::connect(addr).await?;
 
-    // establish a TLS session...
     let connector: TlsConnector = {
-        let mut config = ClientConfig::new();
-        config
-            .root_store
-            .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
+        // build root certificate store from webpki-roots
+        let mut root_store = RootCertStore::empty();
+        root_store.add_server_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.0.iter().map(|ta| {
+            OwnedTrustAnchor::from_subject_spki_name_constraints(
+                ta.subject,
+                ta.spki,
+                ta.name_constraints,
+            )
+        }));
+
+        // build TLS client configuration
+        let config = ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
+
+        // create TLS connector
         Arc::new(config).into()
     };
 
-    let dnsname = DNSNameRef::try_from_ascii_str("one.one.one.one")?;
-    let mut socket = connector.connect(dnsname, socket).await?;
+    // connect to the one.one.one.one server using TLS by encapsulating the TCP socket
+    let domain = ServerName::try_from("one.one.one.one")?;
+    let mut socket = connector.connect(domain, socket).await?;
 
+    // write GET request by using the TLS socket
     socket.write_all(b"GET / HTTP/1.1\r\n").await?;
     socket.write_all(b"Host: one.one.one.one\r\n").await?;
     socket.write_all(b"User-Agent: cool-bear\r\n").await?;
     socket.write_all(b"Connection: close\r\n").await?;
     socket.write_all(b"\r\n").await?;
 
-    let mut response = String::with_capacity(256);
-    socket.read_to_string(&mut response).await?;
+    // read response from the TLS socket
+    let mut buf = [0; 1024];
+    let mut res = String::new();
+    while socket.read(&mut buf).await.is_ok() {
+        let string = std::str::from_utf8(&buf)?;
+        res.push_str(string);
+    }
 
-    let status = response.lines().next().unwrap_or_default();
+    // get status of the response
+    let status = res.lines().next().unwrap_or("No response");
     info!(%status, %name, "Got response!");
 
     Ok(name)
