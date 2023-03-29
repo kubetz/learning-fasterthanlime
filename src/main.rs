@@ -1,42 +1,45 @@
 #![allow(dead_code)]
 
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 use color_eyre::Report;
-use futures::{stream::FuturesUnordered, StreamExt};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
 };
+use tokio_rustls::{rustls::ClientConfig, TlsConnector};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
-
-pub const URL_1: &str = "https://fasterthanli.me/articles/whats-in-the-box";
-pub const URL_2: &str = "https://fasterthanli.me/series/advent-of-code-2020/part-13";
+use webpki::DNSNameRef;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Report> {
     setup()?;
 
-    let results = vec![fetch_url(URL_1), fetch_url(URL_2)]
-        .into_iter()
-        .collect::<FuturesUnordered<_>>()
-        .collect::<Vec<_>>()
-        .await;
-
-    for res in results {
-        res?
-    }
+    let res = tokio::try_join!(fetch_url("first"), fetch_url("second"));
+    info!(?res, "All done!");
 
     Ok(())
 }
 
-async fn fetch_url(name: &str) -> Result<(), Report> {
-    let addr: SocketAddr = ([1, 1, 1, 1], 80).into();
-    let mut socket = TcpStream::connect(addr).await?;
+async fn fetch_url(name: &str) -> Result<&str, Report> {
+    let addr: SocketAddr = ([1, 1, 1, 1], 443).into();
+    let socket = TcpStream::connect(addr).await?;
+
+    // establish a TLS session...
+    let connector: TlsConnector = {
+        let mut config = ClientConfig::new();
+        config
+            .root_store
+            .add_server_trust_anchors(&webpki_roots::TLS_SERVER_ROOTS);
+        Arc::new(config).into()
+    };
+
+    let dnsname = DNSNameRef::try_from_ascii_str("one.one.one.one")?;
+    let mut socket = connector.connect(dnsname, socket).await?;
 
     socket.write_all(b"GET / HTTP/1.1\r\n").await?;
-    socket.write_all(b"Host: 1.1.1.1\r\n").await?;
+    socket.write_all(b"Host: one.one.one.one\r\n").await?;
     socket.write_all(b"User-Agent: cool-bear\r\n").await?;
     socket.write_all(b"Connection: close\r\n").await?;
     socket.write_all(b"\r\n").await?;
@@ -45,9 +48,9 @@ async fn fetch_url(name: &str) -> Result<(), Report> {
     socket.read_to_string(&mut response).await?;
 
     let status = response.lines().next().unwrap_or_default();
-    info!(%status, %name, "Got a response!");
+    info!(%status, %name, "Got response!");
 
-    Ok(())
+    Ok(name)
 }
 
 fn type_name_of<T>(_: &T) -> &str {
