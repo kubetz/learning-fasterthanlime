@@ -10,12 +10,14 @@ use tokio_rustls::TlsConnector;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
+mod tj;
+
 // running multiple futures in parallel while using single threaded runtime
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Report> {
     setup()?;
 
-    let res = tokio::try_join!(fetch_url("first"), fetch_url("second"));
+    let res = tj::try_join(fetch_url("first"), fetch_url("second")).await?;
     info!(?res, "All done!");
 
     Ok(())
@@ -54,11 +56,11 @@ async fn fetch_url(name: &str) -> Result<&str, Report> {
     // write GET request by using the TLS socket
     socket.write_all(b"GET / HTTP/1.1\r\n").await?;
     socket.write_all(b"Host: one.one.one.one\r\n").await?;
-    socket.write_all(b"User-Agent: cool-bear\r\n").await?;
+    socket.write_all(b"User-Agent: ferris\r\n").await?;
     socket.write_all(b"Connection: close\r\n").await?;
     socket.write_all(b"\r\n").await?;
 
-    // read response from the TLS socket
+    // read response from the TLS socket - we read the whole thing just to flex
     let mut buf = [0; 1024];
     let mut res = String::new();
     while socket.read(&mut buf).await.is_ok() {
