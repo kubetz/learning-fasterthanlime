@@ -8,6 +8,7 @@ use tokio_rustls::TlsConnector;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
+// own try-join implementation
 mod tj;
 
 // running multiple futures in parallel while using single threaded runtime
@@ -72,12 +73,6 @@ async fn fetch_1111(name: &str) -> Result<&str, Report> {
     info!(%status, %name, "Got response!");
 
     Ok(name)
-}
-
-#[allow(dead_code)]
-// I just like how it gets the type name of the type while ignoring the value itself
-fn type_name_of<T>(_: &T) -> &str {
-    std::any::type_name::<T>()
 }
 
 // setup tracing and color_eyre
