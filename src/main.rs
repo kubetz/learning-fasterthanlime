@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::{net::SocketAddr, sync::Arc};
 
 use color_eyre::Report;
@@ -17,6 +15,7 @@ mod tj;
 async fn main() -> Result<(), Report> {
     setup()?;
 
+    // using our own try_join implementation
     let res = tj::try_join(fetch_url("first"), fetch_url("second")).await?;
     info!(?res, "All done!");
 
@@ -75,10 +74,13 @@ async fn fetch_url(name: &str) -> Result<&str, Report> {
     Ok(name)
 }
 
+#[allow(dead_code)]
+// I just like how it gets the type name of the type while ignoring the value itself
 fn type_name_of<T>(_: &T) -> &str {
     std::any::type_name::<T>()
 }
 
+// setup tracing and color_eyre
 fn setup() -> Result<(), Report> {
     if std::env::var("RUST_BACKTRACE").is_err() {
         std::env::set_var("RUST_BACKTRACE", "1");

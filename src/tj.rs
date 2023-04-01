@@ -31,7 +31,7 @@ where
     Done,
 }
 
-// Our TryJoin structure behaves like a future
+// our TryJoin structure behaves like a future
 impl<A, B, AR, BR, E> Future for TryJoin<A, B, AR, BR, E>
 where
     A: Future<Output = Result<AR, E>>,
@@ -41,20 +41,20 @@ where
     type Output = Result<(AR, BR), E>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        // Unsafe way of getting a mutable reference to self
-        // We need to pinky swear that we won't move ourselves
+        // unsafe way of getting a mutable reference to self
+        // we need to pinky swear that we won't move ourselves
         let this = unsafe { self.get_unchecked_mut() };
 
-        // Check our state and get our inner futures
-        // Nobody should be polling us if we are done
+        // check our state and get our inner futures
+        // nobody should be polling us if we are done
         let (a, b) = match this {
             Self::Polling { a, b } => (a, b),
             Self::Done => panic!("polled after completion"),
         };
 
-        // If the state is Polling, it means it was not yet resolved
-        // We will create a pin out of it so we can poll it and if it is ready
-        // Switch the state to Done and store the result of the future there
+        // if the state is Polling, it means it was not yet resolved
+        // we will create a pin out of it so we can poll it and if it is ready
+        // switch the state to Done and store the result of the future there
         if let State::Polling(fut) = a {
             if let Poll::Ready(res) = unsafe { Pin::new_unchecked(fut) }.poll(cx) {
                 *a = State::Done(res?);
@@ -68,9 +68,9 @@ where
         }
 
         match (a, b) {
-            // If both futures are resolved, we won't be polled again, so we can move ourselves despite the pin
-            // We cannot be really in Done state already, so that arm is unreachable
-            // We extract future values in the Polling state and return them as a tuple
+            // if both futures are resolved, we won't be polled again, so we can move ourselves despite the pin
+            // we cannot be really in Done state already, so that arm is unreachable
+            // we extract future values in the Polling state and return them as a tuple
             (State::Done(_), State::Done(_)) => match std::mem::replace(this, Self::Done) {
                 Self::Polling {
                     a: State::Done(a),
@@ -78,7 +78,7 @@ where
                 } => Ok((a, b)).into(),
                 _ => unreachable!(),
             },
-            // If any of the futures is not yet resolved, we return Pending and the polling will continue
+            // if any of the futures is not yet resolved, we return Pending and the polling will continue
             _ => Poll::Pending,
         }
     }
@@ -89,7 +89,7 @@ where
     A: Future<Output = Result<AR, E>>,
     B: Future<Output = Result<BR, E>>,
 {
-    // Initially we start in a Polling state with both futures in the Future state
+    // initially we start in a Polling state with both futures in the Future state
     TryJoin::Polling {
         a: State::Polling(a),
         b: State::Polling(b),
