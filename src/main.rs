@@ -16,13 +16,13 @@ async fn main() -> Result<(), Report> {
     setup()?;
 
     // using our own try_join implementation
-    let res = tj::try_join(fetch_url("first"), fetch_url("second")).await?;
+    let res = tj::try_join(fetch_1111("first"), fetch_1111("second")).await?;
     info!(?res, "All done!");
 
     Ok(())
 }
 
-async fn fetch_url(name: &str) -> Result<&str, Report> {
+async fn fetch_1111(name: &str) -> Result<&str, Report> {
     // create raw TCP connection for 1.1.1.1:443
     let addr: SocketAddr = ([1, 1, 1, 1], 443).into();
     let socket = TcpStream::connect(addr).await?;
