@@ -138,7 +138,7 @@ checksum = "86d7a0c1aa76363dac491de0ee99faf6941128376f1cf96f07db7603b7de69dd"
 
 [[package]]
 name = "futures-deep"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "color-eyre",
  "futures",
